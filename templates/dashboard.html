@@ -10,16 +10,19 @@
     <style>
         #map { height: calc(100vh - 100px); border-radius: 15px; z-index: 1; flex: 1; transition: all 0.3s; cursor: pointer; }
         .sidebar-link:hover { background: #f3f4f6; border-left: 4px solid #1e3a8a; }
+        
+        /* Bekat nomlari (Tooltip) dizayni */
         .station-label {
-            background: rgba(255, 255, 255, 0.9) !important;
-            border: 2px solid #1e3a8a !important;
+            background: white !important;
+            border: 1px solid #1e3a8a !important;
             border-radius: 4px !important;
-            padding: 1px 5px !important;
+            padding: 2px 6px !important;
             color: #1e3a8a !important;
-            font-weight: 800 !important;
-            font-size: 11px !important;
+            font-weight: 700 !important;
+            font-size: 10px !important;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
         }
+
         @keyframes pulse-blue {
             0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(30, 58, 138, 0.7); }
             70% { transform: scale(1.3); box-shadow: 0 0 0 15px rgba(30, 58, 138, 0); }
@@ -68,7 +71,6 @@
                 <button onclick="openProfileModal()" class="w-full text-left block px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 transition border-b border-gray-50 font-bold">
                     <i class="fas fa-user-edit mr-2 text-blue-900"></i> Tahrirlash
                 </button>
-                
                 <form action="{% url 'logout' %}" method="POST" class="block">
                     {% csrf_token %}
                     <button type="submit" class="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition font-bold">
@@ -99,12 +101,12 @@
         <main class="flex-1 p-4 flex gap-4 overflow-hidden" style="height: calc(100vh - 80px);">
             <div id="map" class="shadow-2xl border-4 border-white overflow-hidden"></div>
 
-            <div id="station-panel" class="w-96 bg-white shadow-2xl rounded-2xl p-5 overflow-y-auto hidden border-l-8 border-blue-900">
-                <div class="flex justify-between items-center mb-4 border-b pb-2">
-                    <h2 id="p-name" class="text-xl font-black text-blue-900 uppercase italic">Bekat nomi</h2>
-                    <button onclick="closePanel()" class="text-gray-400 hover:text-red-500 transition"><i class="fas fa-times-circle fa-lg"></i></button>
+            <div id="station-panel" class="w-72 bg-white shadow-2xl rounded-2xl p-4 overflow-y-auto hidden border-l-4 border-blue-900">
+                <div class="flex justify-between items-center mb-3 border-b pb-1">
+                    <h2 id="p-name" class="text-sm font-black text-blue-900 uppercase italic">Bekat nomi</h2>
+                    <button onclick="closePanel()" class="text-gray-400 hover:text-red-500 transition"><i class="fas fa-times-circle"></i></button>
                 </div>
-                <div id="p-details" class="space-y-4 text-gray-700"></div>
+                <div id="p-details" class="space-y-3 text-gray-700"></div>
             </div>
         </main>
     </div>
@@ -136,7 +138,6 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // 1. Xarita va Qatlamlar
         var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' });
         var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' });
 
@@ -150,34 +151,23 @@
         var stations = {{ stations_json|safe }};
         var bounds = L.latLngBounds();
 
-        // 2. FAQAT BAZADAGI BEKATLAR ATROFIDAGI YO'LLARNI DINAMIK YUKLASH
         function loadDynamicTracks() {
             if (!stations || stations.length === 0) return;
-
             let lats = stations.map(s => parseFloat(s.lat));
             let lngs = stations.map(s => parseFloat(s.lng));
-            
             let margin = 0.05;
             let minLat = Math.min(...lats) - margin;
             let maxLat = Math.max(...lats) + margin;
             let minLng = Math.min(...lngs) - margin;
             let maxLng = Math.max(...lngs) + margin;
-
             var query = `[out:json][timeout:25];(way["railway"~"rail|main"](${minLat},${minLng},${maxLat},${maxLng}););out body;>;out skel qt;`;
             
             fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query))
                 .then(res => res.json())
                 .then(data => {
                     var geo = osmtogeojson(data);
-                    L.geoJSON(geo, { 
-                        style: { color: "#222", weight: 6, opacity: 0.8 },
-                        interactive: false 
-                    }).addTo(railwayGroup);
-                    
-                    L.geoJSON(geo, { 
-                        style: { color: "#fff", weight: 2, opacity: 1, dashArray: "10, 15" },
-                        interactive: false 
-                    }).addTo(railwayGroup);
+                    L.geoJSON(geo, { style: { color: "#222", weight: 6, opacity: 0.8 }, interactive: false }).addTo(railwayGroup);
+                    L.geoJSON(geo, { style: { color: "#fff", weight: 2, opacity: 1, dashArray: "10, 15" }, interactive: false }).addTo(railwayGroup);
                 })
                 .catch(err => {
                     console.error("Yo'llarni yuklashda xato:", err);
@@ -186,7 +176,6 @@
                 });
         }
 
-        // 3. Bekatlar
         stations.forEach(function(st, index) {
             var marker = L.marker([st.lat, st.lng], {
                 icon: L.divIcon({
@@ -197,7 +186,14 @@
             
             markers.push(marker);
             bounds.extend([st.lat, st.lng]);
-            marker.bindTooltip(st.name, { permanent: true, direction: 'top', offset: [0, -12], className: 'station-label' });
+
+            // Bekat nomi faqat HOVER bo'lganda ko'rinadi (permanent: false)
+            marker.bindTooltip(st.name, { 
+                permanent: false, 
+                direction: 'top', 
+                offset: [0, -15], 
+                className: 'station-label' 
+            });
 
             marker.on('click', function(e) {
                 L.DomEvent.stopPropagation(e);
@@ -210,7 +206,6 @@
             loadDynamicTracks();
         }
 
-        // 4. Boshqaruv Funksiyalari
         function focusStation(index) {
             selectStation(markers[index], stations[index]);
         }
@@ -223,35 +218,35 @@
             document.getElementById('station-panel').classList.remove('hidden');
             document.getElementById('p-name').innerText = st.name;
             document.getElementById('p-details').innerHTML = `
-                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                    <p class="text-[10px] text-blue-900 font-black uppercase mb-2 underline italic">Mas'ul Shaxslar</p>
+                <div class="bg-gray-50 p-2 rounded-lg border border-gray-200 text-xs">
+                    <p class="text-[9px] text-blue-900 font-black uppercase mb-1 opacity-70">Mas'ul Shaxslar</p>
                     <p class="flex justify-between"><span>F.I.O:</span> <b>${st.manager || '—'}</b></p>
                     <p class="flex justify-between"><span>Tel:</span> <b>${st.phone || '—'}</b></p>
                 </div>
-                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
-                    <p class="text-[10px] text-blue-900 font-black uppercase mb-2 underline italic">Texnik Ma'lumotlar</p>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="bg-white p-2 rounded shadow-sm text-center">
-                            <p class="text-[10px] text-gray-500">Jami yo'llar</p>
-                            <p class="font-bold text-lg">${st.total_tracks || 0}</p>
+                <div class="bg-blue-50/50 p-2 rounded-lg border border-blue-100 mt-2 text-xs">
+                    <p class="text-[9px] text-blue-900 font-black uppercase mb-1 opacity-70">Texnik Ma'lumotlar</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="bg-white p-1 rounded shadow-sm text-center">
+                            <p class="text-[8px] text-gray-500">Jami</p>
+                            <p class="font-bold text-sm">${st.total_tracks || 0}</p>
                         </div>
-                        <div class="bg-white p-2 rounded shadow-sm text-center">
-                            <p class="text-[10px] text-gray-500">Strelkalar</p>
-                            <p class="font-bold text-lg">${st.switches || 0}</p>
+                        <div class="bg-white p-1 rounded shadow-sm text-center">
+                            <p class="text-[8px] text-gray-500">Strelka</p>
+                            <p class="font-bold text-sm">${st.switches || 0}</p>
                         </div>
-                        <div class="bg-white p-2 rounded shadow-sm text-center">
-                            <p class="text-[10px] text-gray-500">Asosiy yo'l</p>
-                            <p class="font-bold text-lg text-blue-600">${st.main_tracks || 0}</p>
+                        <div class="bg-white p-1 rounded shadow-sm text-center">
+                            <p class="text-[8px] text-gray-500">Asosiy</p>
+                            <p class="font-bold text-sm text-blue-600">${st.main_tracks || 0}</p>
                         </div>
-                        <div class="bg-white p-2 rounded shadow-sm text-center">
-                            <p class="text-[10px] text-gray-500">Tupiklar</p>
-                            <p class="font-bold text-lg text-red-600">${st.dead_tracks || 0}</p>
+                        <div class="bg-white p-1 rounded shadow-sm text-center">
+                            <p class="text-[8px] text-gray-500">Tupik</p>
+                            <p class="font-bold text-sm text-red-600">${st.dead_tracks || 0}</p>
                         </div>
                     </div>
                 </div>
-                ${st.desc ? `<div class="p-3 bg-yellow-50 rounded-xl text-xs italic border border-yellow-100 mt-4"><b>Eslatma:</b> ${st.desc}</div>` : ''}
+                ${st.desc ? `<div class="p-2 bg-yellow-50 rounded text-[10px] italic border border-yellow-100 mt-2"><b>E:</b> ${st.desc}</div>` : ''}
             `;
-            map.setView([st.lat, st.lng], 20, { animate: true });
+            map.setView([st.lat, st.lng], 18, { animate: true });
         }
 
         function closePanel() {
