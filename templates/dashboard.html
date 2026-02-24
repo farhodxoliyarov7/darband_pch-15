@@ -174,22 +174,28 @@
         }
 
         stations.forEach(function(st, index) {
-            // PCH-15 uchun maxsus bino ikonkasini va hajmini belgilash
             let isMain = st.name.includes("PCH-15");
+            
+            // Tuzatish 1: Agar PCH-15 bo'lsa koordinatani biroz siljitish (ustma-ust tushmasligi uchun)
+            let lat = parseFloat(st.lat);
+            let lng = parseFloat(st.lng);
+            if (isMain) lat += 0.00015; 
+
             let iconHtml = isMain 
                 ? `<div class="custom-station-icon"><i class="fas fa-landmark text-white bg-blue-900 p-3 rounded-xl border-2 border-amber-400 shadow-2xl scale-125"></i></div>`
                 : `<div class="custom-station-icon"><i class="fas fa-train text-blue-900 bg-white p-2 rounded-full border-2 border-blue-900 shadow-md"></i></div>`;
 
-            var marker = L.marker([st.lat, st.lng], {
+            var marker = L.marker([lat, lng], {
                 icon: L.divIcon({
                     html: iconHtml,
                     iconSize: isMain ? [42, 42] : [32, 32], 
                     className: ''
-                })
+                }),
+                zIndexOffset: isMain ? 1000 : 0 // Bino markeri har doim ustida turadi
             }).addTo(railwayGroup);
             
             markers.push(marker);
-            bounds.extend([st.lat, st.lng]);
+            bounds.extend([lat, lng]);
 
             marker.bindTooltip(st.name, { 
                 permanent: false, 
@@ -229,7 +235,6 @@
                 </div>`;
 
             if (st.name.includes("PCH-15")) {
-                // PCH-15 uchun maxsus kengaytirilgan ma'lumotlar
                 detailsHTML += `
                 <div class="bg-blue-50/50 p-3 rounded-lg border border-blue-100 mt-2 text-[11px]">
                     <p class="text-[9px] text-blue-900 font-black uppercase mb-2 opacity-70 border-b pb-1">Umumiy ko'rsatkichlar</p>
@@ -245,7 +250,6 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="bg-amber-50/50 p-3 rounded-lg border border-amber-100 mt-2 text-[10px]">
                     <p class="text-[9px] text-amber-900 font-black uppercase mb-2 opacity-70 border-b pb-1">Sun'iy inshoatlar (Jami: 590 ta)</p>
                     <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-gray-700">
@@ -259,7 +263,6 @@
                     </div>
                 </div>`;
             } else {
-                // Oddiy bekatlar uchun standart ma'lumotlar
                 detailsHTML += `
                 <div class="bg-blue-50/50 p-2 rounded-lg border border-blue-100 mt-2 text-xs">
                     <p class="text-[9px] text-blue-900 font-black uppercase mb-1 opacity-70">Texnik Ma'lumotlar</p>
@@ -289,13 +292,16 @@
             }
 
             document.getElementById('p-details').innerHTML = detailsHTML;
-            map.setView([st.lat, st.lng], 18, { animate: true });
+            map.setView(marker.getLatLng(), 18, { animate: true });
         }
 
+        // Tuzatish 2: Panel yopilganda va orqaga qaytganda umumiy ko'rinishga qaytish
         function closePanel() {
             document.getElementById('station-panel').classList.add('hidden');
             if (activeMarker) L.DomUtil.removeClass(activeMarker._icon, 'active-station');
             activeMarker = null;
+            // Orqaga qaytish (Zoom out)
+            map.fitBounds(bounds, { padding: [50, 50], animate: true });
         }
 
         function toggleUserMenu(e) {
@@ -308,9 +314,18 @@
         }
         function closeProfileModal() { document.getElementById('profile-modal').classList.add('hidden'); }
 
+        // Xarita ustiga bosilganda panelni yopish va zoom-out qilish
+        map.on('click', function(e) {
+            if (e.originalEvent.target.id === 'map') {
+                closePanel();
+            }
+        });
+
         window.onclick = function(e) {
-            if (!e.target.closest('.relative')) document.getElementById('user-dropdown').classList.add('hidden');
-            if (e.target.id === 'map') closePanel();
+            if (!e.target.closest('.relative')) {
+                let dropdown = document.getElementById('user-dropdown');
+                if(dropdown) dropdown.classList.add('hidden');
+            }
         }
 
         setTimeout(() => {
