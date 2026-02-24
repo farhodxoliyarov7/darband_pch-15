@@ -168,18 +168,13 @@
                     L.geoJSON(geo, { style: { color: "#222", weight: 6, opacity: 0.8 }, interactive: false }).addTo(railwayGroup);
                     L.geoJSON(geo, { style: { color: "#fff", weight: 2, opacity: 1, dashArray: "10, 15" }, interactive: false }).addTo(railwayGroup);
                 })
-                .catch(err => {
-                    console.error("Yo'llarni yuklashda xato:", err);
-                });
+                .catch(err => console.error("Yo'llarni yuklashda xato:", err));
         }
 
         stations.forEach(function(st, index) {
             let isMain = st.name.includes("PCH-15");
-            
-            // Tuzatish 1: Agar PCH-15 bo'lsa koordinatani biroz siljitish (ustma-ust tushmasligi uchun)
             let lat = parseFloat(st.lat);
             let lng = parseFloat(st.lng);
-            if (isMain) lat += 0.00015; 
 
             let iconHtml = isMain 
                 ? `<div class="custom-station-icon"><i class="fas fa-landmark text-white bg-blue-900 p-3 rounded-xl border-2 border-amber-400 shadow-2xl scale-125"></i></div>`
@@ -188,10 +183,12 @@
             var marker = L.marker([lat, lng], {
                 icon: L.divIcon({
                     html: iconHtml,
-                    iconSize: isMain ? [42, 42] : [32, 32], 
+                    iconSize: isMain ? [42, 42] : [32, 32],
+                    // PCH-15 belgisini vizual ravishda koordinatadan yuqoriga surish
+                    iconAnchor: isMain ? [21, 55] : [16, 16], 
                     className: ''
                 }),
-                zIndexOffset: isMain ? 1000 : 0 // Bino markeri har doim ustida turadi
+                zIndexOffset: isMain ? 1000 : 0 
             }).addTo(railwayGroup);
             
             markers.push(marker);
@@ -200,7 +197,8 @@
             marker.bindTooltip(st.name, { 
                 permanent: false, 
                 direction: 'top', 
-                offset: [0, -15], 
+                // Tooltipni ham markerdan yuqoriga surish
+                offset: isMain ? [0, -45] : [0, -15], 
                 className: 'station-label' 
             });
 
@@ -295,12 +293,10 @@
             map.setView(marker.getLatLng(), 18, { animate: true });
         }
 
-        // Tuzatish 2: Panel yopilganda va orqaga qaytganda umumiy ko'rinishga qaytish
         function closePanel() {
             document.getElementById('station-panel').classList.add('hidden');
             if (activeMarker) L.DomUtil.removeClass(activeMarker._icon, 'active-station');
             activeMarker = null;
-            // Orqaga qaytish (Zoom out)
             map.fitBounds(bounds, { padding: [50, 50], animate: true });
         }
 
@@ -314,11 +310,8 @@
         }
         function closeProfileModal() { document.getElementById('profile-modal').classList.add('hidden'); }
 
-        // Xarita ustiga bosilganda panelni yopish va zoom-out qilish
         map.on('click', function(e) {
-            if (e.originalEvent.target.id === 'map') {
-                closePanel();
-            }
+            if (e.originalEvent.target.id === 'map') closePanel();
         });
 
         window.onclick = function(e) {
