@@ -1,10 +1,17 @@
 import json
+import requests
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse, JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 from .models import User, Station
 from .utils import send_admin_notification
+
+# --- BOT SOZLAMALARI ---
+# utils.py dagi TOKEN bilan bir xil ekanligiga ishonch hosil qiling
+BOT_TOKEN = "8232486475:AAGg0AioUjsPd8pr04davvMkj0IEmapvp2o"
 
 def register_view(request):
     if request.user.is_authenticated:
@@ -36,8 +43,9 @@ def register_view(request):
                 position=pos, 
                 is_approved=False
             )
+            # Admin botiga xabar yuborish
             send_admin_notification(new_user)
-            messages.success(request, "Ro'yxatdan o'tdingiz! Admin tasdiqlashini kuting.")
+            messages.success(request, "Ro'yxatdan o'tdingiz! Admin tasdiqlashini kiting.")
             return redirect('login')
         except Exception as e:
             messages.error(request, f"Xatolik yuz berdi: {e}")
@@ -101,12 +109,10 @@ def home_view(request):
 
 @login_required
 def profile_update_view(request):
-    """Foydalanuvchi barcha ma'lumotlarini (username, ism, familiya, tel, lavozim) yangilash"""
     if request.method == 'POST':
         user = request.user
         new_username = request.POST.get('username')
         
-        # Agar username o'zgartirilsa va u bazada boshqa birovda bo'lsa xato berish
         if new_username != user.username and User.objects.filter(username=new_username).exists():
             messages.error(request, "Bu login allaqachon band!")
             return redirect('home')
@@ -120,3 +126,46 @@ def profile_update_view(request):
         
         messages.success(request, "Profilingiz muvaffaqiyatli yangilandi!")
     return redirect('home')
+
+# --- TELEGRAM WEBHOOK (Tugmalar ishlashi uchun) ---
+@csrf_exempt
+def telegram_webhook(request):
+    if request.method == 'POST':
+        try:
+            update = json.loads(request.body)
+            
+            if 'callback_query' in update:
+                callback_query = update['callback_query']
+                data = callback_query['data']  # Masalan: 'approve_2'
+                chat_id = callback_query['message']['chat']['id']
+                message_id = callback_query['message']['message_id']
+                original_text = callback_query['message']['text']
+
+                action, user_id = data.split('_')
+                user = User.objects.filter(id=user_id).first()
+
+                if user:
+                    if action == 'approve':
+                        user.is_approved = True
+                        user.save()
+                        status_msg = f"✅ {user.get_full_name()} tasdiqlandi!"
+                    elif action == 'reject':
+                        user.delete()
+                        status_msg = f"❌ {user_id}-ID dagi so'rov rad etildi."
+                else:
+                    status_msg = "⚠️ Xatolik: Foydalanuvchi topilmadi."
+
+                # Telegramdagi xabarni tahrirlash (tugmalarni olib tashlash)
+                edit_url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
+                requests.post(edit_url, json={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "text": f"{original_text}\n\n📝 **Natija:** {status_msg}",
+                    "parse_mode": "Markdown"
+                })
+
+            return HttpResponse("OK")
+        except Exception as e:
+            return HttpResponse(f"Error: {e}", status=400)
+            
+    return HttpResponse("Method not allowed", status=405)
