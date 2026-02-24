@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <title>Darband TYMF - Kirish</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white rounded-3xl shadow-xl flex flex-col md:flex-row max-w-4xl w-full overflow-hidden">
+        
+        <div class="bg-blue-900 md:w-1/2 p-12 text-white flex flex-col items-center justify-center text-center">
+            <h1 class="text-3xl font-bold mb-2">Darband TYMF</h1>
+            <p class="text-blue-200 mb-8">Raqamli nazorat platformasi</p>
+            <div class="w-48 h-48 border-2 border-dashed border-blue-400 rounded-2xl flex items-center justify-center">
+                <span class="text-sm">🚂 POYEZD RASM JOYI</span>
+            </div>
+        </div>
+
+        <div class="md:w-1/2 p-12">
+            <div class="flex space-x-4 mb-8 border-b">
+                <a href="{% url 'login' %}" class="pb-2 border-b-2 border-blue-600 font-bold text-blue-900">KIRISH</a>
+                <a href="{% url 'register' %}" class="pb-2 text-gray-400 hover:text-blue-600">RO'YXATDAN O'TISH</a>
+            </div>
+
+            <h2 class="text-2xl font-bold mb-2 text-gray-800">Xush kelibsiz!</h2>
+            <p class="text-gray-500 mb-6 text-sm">Davom etish uchun tizimga kiring</p>
+
+            {% if messages %}
+                <div class="mb-6 space-y-2">
+                    {% for message in messages %}
+                        <div class="p-5 rounded-xl shadow-md border-l-8 
+                            {% if message.tags == 'error' %} 
+                                bg-red-100 border-red-600 text-red-800 
+                            {% else %} 
+                                bg-green-100 border-green-600 text-green-800 
+                            {% endif %}">
+                            <p class="text-lg md:text-xl font-black text-center leading-tight">
+                                {{ message }}
+                            </p>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <form method="POST" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Login</label>
+                    <input type="text" name="username" required class="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500" placeholder="Username">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Parol</label>
+                    <input type="password" name="password" required class="w-full p-3 border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500" placeholder="••••••••">
+                </div>
+                <div class="flex items-center justify-between text-xs text-gray-500">
+                    <label class="flex items-center"><input type="checkbox" class="mr-1"> Eslab qolish</label>
+                    <a href="#" class="text-blue-600">Parolni unutdingizmi?</a>
+                </div>
+                <button type="submit" class="w-full bg-blue-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-800 transition uppercase tracking-wider">Kirish</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

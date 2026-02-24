@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <title>Darband TYMF - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/osmtogeojson@3.0.0-beta.4/osmtogeojson.js"></script>
+    <style>
+        #map { height: calc(100vh - 100px); border-radius: 15px; z-index: 1; flex: 1; transition: all 0.3s; cursor: pointer; }
+        .sidebar-link:hover { background: #f3f4f6; border-left: 4px solid #1e3a8a; }
+        .station-label {
+            background: rgba(255, 255, 255, 0.9) !important;
+            border: 2px solid #1e3a8a !important;
+            border-radius: 4px !important;
+            padding: 1px 5px !important;
+            color: #1e3a8a !important;
+            font-weight: 800 !important;
+            font-size: 11px !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        }
+        @keyframes pulse-blue {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(30, 58, 138, 0.7); }
+            70% { transform: scale(1.3); box-shadow: 0 0 0 15px rgba(30, 58, 138, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(30, 58, 138, 0); }
+        }
+        .active-station i {
+            animation: pulse-blue 1.5s infinite !important;
+            background-color: #1e3a8a !important;
+            color: white !important;
+            border-color: #fbbf24 !important;
+        }
+        .custom-station-icon i {
+            display: flex; align-items: center; justify-content: center;
+            width: 32px; height: 32px; transition: all 0.3s ease;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 overflow-hidden">
+
+    {% if messages %}
+    <div id="msg-container" class="fixed top-20 right-5 z-[2000] space-y-2">
+        {% for message in messages %}
+        <div class="msg-item bg-white border-l-4 border-green-500 shadow-2xl p-4 rounded-xl flex items-center space-x-3 animate-bounce">
+            <i class="fas fa-check-circle text-green-500 fa-lg"></i>
+            <span class="text-sm font-black text-gray-700 uppercase tracking-tighter">{{ message }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <header class="bg-white shadow-md px-7 py-3 flex justify-between items-center relative z-[1000]">
+        <div class="flex-1 text-center font-extrabold text-blue-900 uppercase tracking-tighter">
+            DARBAND Temir yo'l masofa filiali PCH-15 raqamli nazorat platformasi
+        </div>
+
+        <div class="relative">
+            <button onclick="toggleUserMenu(event)" class="flex items-center space-x-3 focus:outline-none p-1 hover:bg-gray-50 rounded-xl transition">
+                <div class="text-right">
+                    <p class="text-sm font-bold text-gray-800">{{ user.first_name }} {{ user.last_name }}</p>
+                    <p class="text-[10px] text-blue-600 font-semibold uppercase">{{ user.position|default:"Xodim" }}</p>
+                </div>
+                <img src="https://ui-avatars.com/api/?name={{ user.first_name }}+{{ user.last_name }}&background=1e3a8a&color=fff" class="w-10 h-10 rounded-full border-2 border-blue-900">
+            </button>
+            
+            <div id="user-dropdown" class="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-2xl py-2 border border-gray-100 hidden">
+                <button onclick="openProfileModal()" class="w-full text-left block px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 transition border-b border-gray-50 font-bold">
+                    <i class="fas fa-user-edit mr-2 text-blue-900"></i> Tahrirlash
+                </button>
+                
+                <form action="{% url 'logout' %}" method="POST" class="block">
+                    {% csrf_token %}
+                    <button type="submit" class="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition font-bold">
+                        <i class="fas fa-power-off mr-2"></i> Chiqish
+                    </button>
+                </form>
+            </div>
+        </div>
+    </header>
+
+    <div class="flex">
+        <aside class="w-64 bg-white h-screen shadow-lg border-r py-6">
+            <nav class="flex flex-col">
+                <a href="#" class="sidebar-link px-6 py-4 flex items-center text-gray-600 transition"><i class="fas fa-info-circle w-6 text-blue-900"></i> Biz haqimizda</a>
+                <div class="group relative">
+                    <button class="w-full sidebar-link px-6 py-4 flex items-center text-gray-600 transition"><i class="fas fa-train w-6 text-blue-900"></i> Bekatlar</button>
+                    <div class="bg-gray-50 max-h-40 overflow-y-auto hidden group-hover:block border-b">
+                        {% for st in stations %}
+                        <button onclick="focusStation({{ forloop.index0 }})" class="w-full text-left px-10 py-2 text-[10px] hover:text-blue-900 border-b border-gray-100 uppercase font-bold text-gray-500">{{ st.name }}</button>
+                        {% endfor %}
+                    </div>
+                </div>
+                <a href="#" class="sidebar-link px-6 py-4 flex items-center text-gray-600 transition font-bold text-blue-900 border-l-4 border-blue-900 bg-blue-50"><i class="fas fa-map-marked-alt w-6"></i> Onlayn Xarita</a>
+                <a href="#" class="sidebar-link px-6 py-4 flex items-center text-gray-600 transition"><i class="fas fa-users w-6 text-blue-900"></i> Xodimlar</a>
+            </nav>
+        </aside>
+
+        <main class="flex-1 p-4 flex gap-4 overflow-hidden" style="height: calc(100vh - 80px);">
+            <div id="map" class="shadow-2xl border-4 border-white overflow-hidden"></div>
+
+            <div id="station-panel" class="w-96 bg-white shadow-2xl rounded-2xl p-5 overflow-y-auto hidden border-l-8 border-blue-900">
+                <div class="flex justify-between items-center mb-4 border-b pb-2">
+                    <h2 id="p-name" class="text-xl font-black text-blue-900 uppercase italic">Bekat nomi</h2>
+                    <button onclick="closePanel()" class="text-gray-400 hover:text-red-500 transition"><i class="fas fa-times-circle fa-lg"></i></button>
+                </div>
+                <div id="p-details" class="space-y-4 text-gray-700"></div>
+            </div>
+        </main>
+    </div>
+
+    <div id="profile-modal" class="fixed inset-0 bg-black/70 hidden z-[2000] flex items-center justify-center backdrop-blur-md">
+        <div class="bg-white rounded-3xl p-8 w-[500px] shadow-2xl border-t-[10px] border-blue-900">
+            <h3 class="text-2xl font-black text-blue-900 uppercase mb-6 text-center">Profilni Tahrirlash</h3>
+            <form action="{% url 'profile_update' %}" method="POST" class="grid grid-cols-2 gap-5">
+                {% csrf_token %}
+                <div class="col-span-2">
+                    <label class="text-[11px] font-black text-gray-400 uppercase ml-1">Username</label>
+                    <input type="text" name="username" value="{{ user.username }}" class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-3 font-bold">
+                </div>
+                <div>
+                    <label class="text-[11px] font-black text-gray-400 uppercase ml-1">Ism</label>
+                    <input type="text" name="first_name" value="{{ user.first_name }}" class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-3 font-bold">
+                </div>
+                <div>
+                    <label class="text-[11px] font-black text-gray-400 uppercase ml-1">Familiya</label>
+                    <input type="text" name="last_name" value="{{ user.last_name }}" class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-3 font-bold">
+                </div>
+                <div class="col-span-2 flex gap-4 mt-4">
+                    <button type="button" onclick="closeProfileModal()" class="flex-1 bg-gray-100 py-4 rounded-2xl font-black text-gray-500 hover:bg-gray-200 transition">BEKOR QILISH</button>
+                    <button type="submit" class="flex-1 bg-blue-900 text-white py-4 rounded-2xl font-black hover:bg-blue-800 transition">SAQLASH</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // 1. Xarita va Qatlamlar
+        var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri' });
+        var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OSM' });
+
+        var map = L.map('map', { center: [38.2045, 67.2481], zoom: 10, layers: [satellite] });
+        var railwayGroup = L.featureGroup().addTo(map);
+
+        L.control.layers({ "Sputnik": satellite, "Xarita": streets }, { "Relslar/Bekatlar": railwayGroup }, { position: 'topright', collapsed: false }).addTo(map);
+
+        var markers = [];
+        var activeMarker = null;
+        var stations = {{ stations_json|safe }};
+        var bounds = L.latLngBounds();
+
+        // 2. FAQAT BAZADAGI BEKATLAR ATROFIDAGI YO'LLARNI DINAMIK YUKLASH
+        function loadDynamicTracks() {
+            if (!stations || stations.length === 0) return;
+
+            let lats = stations.map(s => parseFloat(s.lat));
+            let lngs = stations.map(s => parseFloat(s.lng));
+            
+            let margin = 0.05;
+            let minLat = Math.min(...lats) - margin;
+            let maxLat = Math.max(...lats) + margin;
+            let minLng = Math.min(...lngs) - margin;
+            let maxLng = Math.max(...lngs) + margin;
+
+            var query = `[out:json][timeout:25];(way["railway"~"rail|main"](${minLat},${minLng},${maxLat},${maxLng}););out body;>;out skel qt;`;
+            
+            fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query))
+                .then(res => res.json())
+                .then(data => {
+                    var geo = osmtogeojson(data);
+                    L.geoJSON(geo, { 
+                        style: { color: "#222", weight: 6, opacity: 0.8 },
+                        interactive: false 
+                    }).addTo(railwayGroup);
+                    
+                    L.geoJSON(geo, { 
+                        style: { color: "#fff", weight: 2, opacity: 1, dashArray: "10, 15" },
+                        interactive: false 
+                    }).addTo(railwayGroup);
+                })
+                .catch(err => {
+                    console.error("Yo'llarni yuklashda xato:", err);
+                    let coords = stations.map(s => [s.lat, s.lng]);
+                    L.polyline(coords, {color: '#1e3a8a', weight: 3, dashArray: '5, 10', opacity: 0.5}).addTo(railwayGroup);
+                });
+        }
+
+        // 3. Bekatlar
+        stations.forEach(function(st, index) {
+            var marker = L.marker([st.lat, st.lng], {
+                icon: L.divIcon({
+                    html: '<div class="custom-station-icon"><i class="fas fa-train text-blue-900 bg-white p-2 rounded-full border-2 border-blue-900 shadow-md"></i></div>',
+                    iconSize: [32, 32], className: ''
+                })
+            }).addTo(railwayGroup);
+            
+            markers.push(marker);
+            bounds.extend([st.lat, st.lng]);
+            marker.bindTooltip(st.name, { permanent: true, direction: 'top', offset: [0, -12], className: 'station-label' });
+
+            marker.on('click', function(e) {
+                L.DomEvent.stopPropagation(e);
+                selectStation(marker, st);
+            });
+        });
+
+        if (stations.length > 0) {
+            map.fitBounds(bounds, { padding: [50, 50] });
+            loadDynamicTracks();
+        }
+
+        // 4. Boshqaruv Funksiyalari
+        function focusStation(index) {
+            selectStation(markers[index], stations[index]);
+        }
+
+        function selectStation(marker, st) {
+            if (activeMarker) L.DomUtil.removeClass(activeMarker._icon, 'active-station');
+            activeMarker = marker;
+            L.DomUtil.addClass(marker._icon, 'active-station');
+            
+            document.getElementById('station-panel').classList.remove('hidden');
+            document.getElementById('p-name').innerText = st.name;
+            document.getElementById('p-details').innerHTML = `
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                    <p class="text-[10px] text-blue-900 font-black uppercase mb-2 underline italic">Mas'ul Shaxslar</p>
+                    <p class="flex justify-between"><span>F.I.O:</span> <b>${st.manager || '—'}</b></p>
+                    <p class="flex justify-between"><span>Tel:</span> <b>${st.phone || '—'}</b></p>
+                </div>
+                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 mt-4">
+                    <p class="text-[10px] text-blue-900 font-black uppercase mb-2 underline italic">Texnik Ma'lumotlar</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-white p-2 rounded shadow-sm text-center">
+                            <p class="text-[10px] text-gray-500">Jami yo'llar</p>
+                            <p class="font-bold text-lg">${st.total_tracks || 0}</p>
+                        </div>
+                        <div class="bg-white p-2 rounded shadow-sm text-center">
+                            <p class="text-[10px] text-gray-500">Strelkalar</p>
+                            <p class="font-bold text-lg">${st.switches || 0}</p>
+                        </div>
+                        <div class="bg-white p-2 rounded shadow-sm text-center">
+                            <p class="text-[10px] text-gray-500">Asosiy yo'l</p>
+                            <p class="font-bold text-lg text-blue-600">${st.main_tracks || 0}</p>
+                        </div>
+                        <div class="bg-white p-2 rounded shadow-sm text-center">
+                            <p class="text-[10px] text-gray-500">Tupiklar</p>
+                            <p class="font-bold text-lg text-red-600">${st.dead_tracks || 0}</p>
+                        </div>
+                    </div>
+                </div>
+                ${st.desc ? `<div class="p-3 bg-yellow-50 rounded-xl text-xs italic border border-yellow-100 mt-4"><b>Eslatma:</b> ${st.desc}</div>` : ''}
+            `;
+            map.setView([st.lat, st.lng], 20, { animate: true });
+        }
+
+        function closePanel() {
+            document.getElementById('station-panel').classList.add('hidden');
+            if (activeMarker) L.DomUtil.removeClass(activeMarker._icon, 'active-station');
+            activeMarker = null;
+            map.fitBounds(bounds, { padding: [50, 50] });
+        }
+
+        function toggleUserMenu(e) {
+            e.stopPropagation();
+            document.getElementById('user-dropdown').classList.toggle('hidden');
+        }
+        function openProfileModal() {
+            document.getElementById('profile-modal').classList.remove('hidden');
+            document.getElementById('user-dropdown').classList.add('hidden');
+        }
+        function closeProfileModal() { document.getElementById('profile-modal').classList.add('hidden'); }
+
+        window.onclick = function(e) {
+            if (!e.target.closest('.relative')) document.getElementById('user-dropdown').classList.add('hidden');
+            if (e.target.id === 'map') closePanel();
+        }
+
+        setTimeout(() => {
+            const container = document.getElementById('msg-container');
+            if(container) {
+                container.style.opacity = "0";
+                setTimeout(() => container.remove(), 800);
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
