@@ -11,7 +11,7 @@ from .utils import send_admin_notification
 
 # --- BOT SOZLAMALARI ---
 # utils.py dagi TOKEN bilan bir xil ekanligiga ishonch hosil qiling
-BOT_TOKEN = "8232486475:AAGg0AioUjsPd8pr04davvMkj0IEmapvp2o"
+BOT_TOKEN = "8232486475:AAGg0AioUjsPd8prO4davvMkj0IEmapvp2o"
 
 def register_view(request):
     if request.user.is_authenticated:
